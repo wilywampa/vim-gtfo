@@ -105,7 +105,12 @@ func! gtfo#open#term(dir, cmd) "{{{
   endif
 
   if s:istmux
-    silent exec '!tmux split-window -h \; send-keys "cd ''' . l:dir . ''' && clear" C-m'
+    if exists("a:cmd") && a:cmd == 'win'
+      silent exec "!tmux new-window 'cd " . l:dir . "; $SHELL'"
+    else
+      silent exec '!tmux split-window -'.
+          \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'"
+    endif
   elseif executable('cygstart') && executable('mintty')
     " https://code.google.com/p/mintty/wiki/Tips
     silent exec '!cd ''' . l:dir . ''' && cygstart mintty /bin/env CHERE_INVOKING=1 /bin/bash'
@@ -139,6 +144,22 @@ func! gtfo#open#term(dir, cmd) "{{{
     call s:beep('failed to open terminal')
   endif
 endf "}}}
+
+func! gtfo#open#splitdirection()
+  let tmuxcols = split(system('tmux display-message -pF "#{client_width} #{pane_width}"'))
+  let l:split=0
+  for win in range(1,winnr('$'))
+    if winwidth(win) < &columns
+      let split=1
+    endif
+  endfor
+  if tmuxcols[0] > 160 && tmuxcols[0] == tmuxcols[1] && !split
+      \ && (str2float(&columns) / str2float(&lines)) > 2.5
+    return 'h'
+  else
+    return 'v'
+  endif
+endf
 
 if s:ismac "{{{
 func! s:mac_do_ascript_voodoo(cmd, expanded_dir)

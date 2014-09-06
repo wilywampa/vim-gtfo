@@ -17,11 +17,17 @@ endif
 if maparg('got', 'n') ==# ''
   nnoremap <silent> got :<c-u>call gtfo#open#term("%:p:h", "")<cr>
 endif
+if maparg('gOt', 'n') ==# ''
+  nnoremap <silent> gOt :<c-u>call gtfo#open#term("%:p:h", "win")<cr>
+endif
 if maparg('goF', 'n') ==# ''
   nnoremap <silent> goF :<c-u>call gtfo#open#file(getcwd())<cr>
 endif
 if maparg('goT', 'n') ==# ''
   nnoremap <silent> goT :<c-u>call gtfo#open#term(getcwd(), "")<cr>
+endif
+if maparg('gOT', 'n') ==# ''
+  nnoremap <silent> gOT :<c-u>call gtfo#open#term(getcwd(), "win")<cr>
 endif
 
 let &cpo = s:cpo_save
