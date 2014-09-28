@@ -16,6 +16,10 @@ endf
 func! s:trimws(s)
   return substitute(a:s, '^\s*\(.\{-}\)\s*$', '\1', '')
 endf
+func! s:scrub(s)
+  "replace \\ with \ (greedy) #21
+  return substitute(a:s, '\\\\\+', '\', 'g')
+endf
 func! s:empty(s)
   return strlen(s:trimws(a:s)) == 0
 endf
@@ -48,13 +52,26 @@ func! s:find_cygwin_bash()
   return executable($SystemDrive.'/cygwin/bin/bash') ? $SystemDrive.'/cygwin/bin/bash' : ''
 endf
 
+func! s:force_cmdexe()
+  if &shell !~? "cmd"
+    let s:shell=&shell | let s:shslash=&shellslash | let s:shcmdflag=&shellcmdflag
+    set shell=$COMSPEC noshellslash shellcmdflag=/c
+  endif
+endf
+
+func! s:restore_shell()
+  if exists("s:shell")
+    let &shell=s:shell | let &shellslash=s:shslash | let &shellcmdflag=s:shcmdflag
+  endif
+endf
+
 func! gtfo#open#file(path) "{{{
   if exists('+shellslash') && &shellslash
     "Windows: force expand() to return `\` paths so explorer.exe won't choke. #11
     let l:shslash=1 | set noshellslash
   endif
 
-  let l:path = expand(a:path, 1)
+  let l:path = s:scrub(expand(a:path, 1))
   let l:dir = isdirectory(l:path) ? l:path : fnamemodify(l:path, ":h")
   let l:validfile = filereadable(l:path)
 
@@ -67,21 +84,23 @@ func! gtfo#open#file(path) "{{{
     return
   endif
 
-  if executable('cygstart')
+  if s:iswin
+    call s:force_cmdexe()
+    silent exec '!start explorer '.(l:validfile ? '/select,"'.l:path.'"' : l:dir)
+    call s:restore_shell()
+  elseif executable('cygstart')
     if l:validfile
       silent exec "!cygstart explorer /select,`cygpath -w '".l:path."'`"
     else
       silent exec "!cygstart explorer `cygpath -w '".l:dir."'`"
     endif
-    redraw!
+    if !s:isgui | redraw! | endif
   elseif !s:is_gui_available && !executable('xdg-open')
     if s:istmux "fallback to 'got'
       call gtfo#open#term(l:dir, "")
     else
       call s:beep('failed to open file manager')
     endif
-  elseif s:iswin
-    silent exec '!start explorer '.(l:validfile ? '/select,"'.l:path.'"' : l:dir)
   elseif s:ismac
     if l:validfile
       silent exec "!open --reveal '".l:path."'"
@@ -98,7 +117,7 @@ func! gtfo#open#file(path) "{{{
 endf "}}}
 
 func! gtfo#open#term(dir, cmd) "{{{
-  let l:dir = expand(a:dir, 1)
+  let l:dir = s:scrub(expand(a:dir, 1))
   if !isdirectory(l:dir) "this happens if a directory was deleted outside of vim.
     call s:beep('invalid/missing directory: '.l:dir)
     return
@@ -111,18 +130,20 @@ func! gtfo#open#term(dir, cmd) "{{{
       silent exec '!tmux split-window -'.
           \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'"
     endif
-  elseif executable('cygstart') && executable('mintty')
+  elseif &shell !~? "cmd" && executable('cygstart') && executable('mintty')
     " https://code.google.com/p/mintty/wiki/Tips
     silent exec '!cd ''' . l:dir . ''' && cygstart mintty /bin/env CHERE_INVOKING=1 /bin/bash'
-    redraw!
+    if !s:isgui | redraw! | endif
   elseif s:iswin
+    call s:force_cmdexe()
     if s:termpath =~? "bash" && executable(s:termpath)
-      " NOTE: Yes, these are nested quotes (""foo" "bar""), and yes, that is what cmd.exe expects.
       silent exe '!start '.$COMSPEC.' /c "cd "'.l:dir.'" & "' . s:termpath . '" --login -i "'
     else "Assume it's a path with the required arguments (considered 'not executable' by Vim).
       if s:empty(s:termpath) | let s:termpath = 'cmd.exe /k'  | endif
+      " Yes, these are nested quotes (""foo" "bar""), and yes, that is what cmd.exe expects.
       silent exe '!start '.s:termpath.' "cd "'.l:dir.'""'
     endif
+    call s:restore_shell()
   elseif s:ismac
     if (s:empty(s:termpath) && $TERM_PROGRAM ==? 'iTerm.app') || s:termpath ==? "iterm"
       silent call s:mac_open_iTerm(l:dir)
@@ -187,8 +208,8 @@ endf
 func! s:mac_open_iTerm(expanded_dir)
   let l:cmd = "
         \ tell application 'iTerm'                             \n
-        \   set term to (make new terminal)                    \n
-        \   tell term                                          \n
+        \   make new terminal                                  \n
+        \   tell the current terminal                          \n
         \     set sess to (launch session 'Default Session')   \n
         \     tell sess                                        \n
         \       write text '___'                               \n
