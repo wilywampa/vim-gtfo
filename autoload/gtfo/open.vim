@@ -103,14 +103,12 @@ func! gtfo#open#file(path) "{{{
     endif
   elseif s:ismac
     if l:validfile
-      silent exec "!open --reveal '".l:path."'"
+      silent call system("open --reveal '".l:path."'")
     else
-      silent exec "!open '".l:dir."'"
+      silent call system("open '".l:dir."'")
     endif
-    if !s:isgui | redraw! | endif
   elseif executable('xdg-open')
-    silent exec "!xdg-open '".l:dir."' &"
-    if !s:isgui | redraw! | endif
+    silent call system("xdg-open '".l:dir."' &")
   else
     call s:beep('xdg-open is not in your $PATH. Try "sudo apt-get install xdg-utils"')
   endif
@@ -125,10 +123,10 @@ func! gtfo#open#term(dir, cmd) "{{{
 
   if s:istmux
     if exists("a:cmd") && a:cmd == 'win'
-      silent exec "!tmux new-window 'cd " . l:dir . "; $SHELL'"
+      silent call system("tmux new-window 'cd " . l:dir . "; $SHELL'")
     else
-      silent exec '!tmux split-window -'.
-          \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'"
+      silent call system("tmux split-window -'".
+          \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'")
     endif
   elseif &shell !~? "cmd" && executable('cygstart') && executable('mintty')
     " https://code.google.com/p/mintty/wiki/Tips
@@ -146,11 +144,10 @@ func! gtfo#open#term(dir, cmd) "{{{
     call s:restore_shell()
   elseif s:ismac
     if (s:empty(s:termpath) && $TERM_PROGRAM ==? 'iTerm.app') || s:termpath ==? "iterm"
-      silent call s:mac_open_iTerm(l:dir)
+      silent call system("open -a iTerm '".l:dir."'")
     else
       if s:empty(s:termpath) | let s:termpath = 'Terminal' | endif
-      silent exec "!open -a ".s:termpath." '".l:dir."'"
-      if !s:isgui | redraw! | endif
+      silent call system("open -a ".s:termpath." '".l:dir."'")
     endif
   elseif s:is_gui_available
     if !s:empty(s:termpath)
@@ -165,61 +162,5 @@ func! gtfo#open#term(dir, cmd) "{{{
     call s:beep('failed to open terminal')
   endif
 endf "}}}
-
-func! gtfo#open#splitdirection()
-  let tmuxcols = split(system('tmux display-message -pF "#{client_width} #{pane_width}"'))
-  let l:split=0
-  for win in range(1,winnr('$'))
-    if winwidth(win) < &columns
-      let split=1
-    endif
-  endfor
-  if tmuxcols[0] > 160 && tmuxcols[0] == tmuxcols[1] && !split
-      \ && (str2float(&columns) / str2float(&lines)) > 2.5
-    return 'h'
-  else
-    return 'v'
-  endif
-endf
-
-if s:ismac "{{{
-func! s:mac_do_ascript_voodoo(cmd, expanded_dir)
-  "This is somewhat complicated because we must pass a correctly-escaped,
-  "newline-delimitd applescript literal from vim => shell => osascript.
-
-  "Applescript does not allow apostrophes; we use them only for readability.
-  "replace ' with \"'
-  let l:cmd = substitute(a:cmd,  "'", '\\"', 'g')
-  "replace ___ with the shell command to be passed from applescript to Terminal.app.
-  let l:cmd = substitute(l:cmd, '___', "cd '".a:expanded_dir."'", 'g')
-  call system('osascript -e " ' . l:cmd . '"')
-endf
-
-func! s:mac_open_terminal(expanded_dir)
-  let l:cmd = "
-        \ tell application 'Terminal'     \n
-        \   do script with command '___'  \n
-        \   activate                      \n
-        \ end tell                        \n
-        \ "
-  call s:mac_do_ascript_voodoo(l:cmd, a:expanded_dir)
-endf
-
-func! s:mac_open_iTerm(expanded_dir)
-  let l:cmd = "
-        \ tell application 'iTerm'                             \n
-        \   make new terminal                                  \n
-        \   tell the current terminal                          \n
-        \     set sess to (launch session 'Default Session')   \n
-        \     tell sess                                        \n
-        \       write text '___'                               \n
-        \     end tell                                         \n
-        \   end tell                                           \n
-        \   activate                                           \n
-        \ end tell                                             \n
-        \ "
-  call s:mac_do_ascript_voodoo(l:cmd, a:expanded_dir)
-endf
-endif "}}}
 
 call s:init()
