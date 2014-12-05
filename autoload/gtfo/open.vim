@@ -125,7 +125,7 @@ func! gtfo#open#term(dir, cmd) "{{{
     if exists("a:cmd") && a:cmd == 'win'
       silent call system("tmux new-window 'cd " . l:dir . "; $SHELL'")
     else
-      silent call system("tmux split-window -'".
+      silent call system('tmux split-window -'.
           \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'")
     endif
   elseif &shell !~? "cmd" && executable('cygstart') && executable('mintty')
@@ -162,5 +162,21 @@ func! gtfo#open#term(dir, cmd) "{{{
     call s:beep('failed to open terminal')
   endif
 endf "}}}
+
+func! gtfo#open#splitdirection()
+  let tmuxcols = split(system('tmux display-message -pF "#{client_width} #{pane_width}"'))
+  let l:split=0
+  for win in range(1,winnr('$'))
+    if winwidth(win) < &columns
+      let split=1
+    endif
+  endfor
+  if tmuxcols[0] > 160 && tmuxcols[0] == tmuxcols[1] && !split
+      \ && (str2float(&columns) / str2float(&lines)) > 2.5
+    return 'h'
+  else
+    return 'v'
+  endif
+endf
 
 call s:init()
