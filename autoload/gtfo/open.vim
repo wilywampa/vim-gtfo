@@ -9,6 +9,7 @@ let s:isgui = has('gui_running') || &term ==? 'builtin_gui'
 let s:is_gui_available = s:ismac || s:iswin || (!empty($DISPLAY) && $TERM !=# 'linux')
 
 let s:termpath = ''
+let s:tmux_1_6 = 0
 
 func! s:beep(s)
   echohl ErrorMsg | echom 'gtfo: '.a:s | echohl None
@@ -19,6 +20,9 @@ endf
 func! s:scrub(s)
   "replace \\ with \ (greedy) #21
   return substitute(a:s, '\\\\\+', '\', 'g')
+endf
+func! s:bang_escape(s)
+  return escape(a:s, '#%')
 endf
 func! s:empty(s)
   return strlen(s:trimws(a:s)) == 0
@@ -38,6 +42,11 @@ func! s:init()
   endif
 
   let s:termpath = s:trimws(s:termpath)
+
+  if s:istmux
+    call system('tmux -V')
+    let s:tmux_1_6 = v:shell_error
+  endif
 endf
 
 func! s:find_cygwin_bash()
@@ -86,13 +95,13 @@ func! gtfo#open#file(path) "{{{
 
   if s:iswin
     call s:force_cmdexe()
-    silent exec '!start explorer '.(l:validfile ? '/select,"'.l:path.'"' : l:dir)
+    silent exec '!start explorer '.(l:validfile ? '/select,"'.s:bang_escape(l:path).'"' : l:dir)
     call s:restore_shell()
   elseif executable('cygstart')
     if l:validfile
-      silent exec "!cygstart explorer /select,`cygpath -w '".l:path."'`"
+      silent exec "!cygstart explorer /select,`cygpath -w '".s:bang_escape(l:path)."'`"
     else
-      silent exec "!cygstart explorer `cygpath -w '".l:dir."'`"
+      silent exec "!cygstart explorer `cygpath -w '".s:bang_escape(l:dir)."'`"
     endif
     if !s:isgui | redraw! | endif
   elseif !s:is_gui_available && !executable('xdg-open')
@@ -130,16 +139,16 @@ func! gtfo#open#term(dir, cmd) "{{{
     endif
   elseif &shell !~? "cmd" && executable('cygstart') && executable('mintty')
     " https://code.google.com/p/mintty/wiki/Tips
-    silent exec '!cd ''' . l:dir . ''' && cygstart mintty /bin/env CHERE_INVOKING=1 /bin/bash'
+    silent exec '!cd ''' . s:bang_escape(l:dir) . ''' && cygstart mintty /bin/env CHERE_INVOKING=1 /bin/bash'
     if !s:isgui | redraw! | endif
   elseif s:iswin
     call s:force_cmdexe()
     if s:termpath =~? "bash" && executable(s:termpath)
-      silent exe '!start '.$COMSPEC.' /c "cd "'.l:dir.'" & "' . s:termpath . '" --login -i "'
+      silent exe '!start '.$COMSPEC.' /c "cd "'.s:bang_escape(l:dir).'" & "' . s:termpath . '" --login -i "'
     else "Assume it's a path with the required arguments (considered 'not executable' by Vim).
       if s:empty(s:termpath) | let s:termpath = 'cmd.exe /k'  | endif
       " Yes, these are nested quotes (""foo" "bar""), and yes, that is what cmd.exe expects.
-      silent exe '!start '.s:termpath.' "cd "'.l:dir.'""'
+      silent exe '!start '.s:termpath.' "cd "'.s:bang_escape(l:dir).'""'
     endif
     call s:restore_shell()
   elseif s:ismac
@@ -151,9 +160,9 @@ func! gtfo#open#term(dir, cmd) "{{{
     endif
   elseif s:is_gui_available
     if !s:empty(s:termpath)
-      silent exec "silent ! ".s:termpath." '".l:dir."' &"
+      silent call system(s:termpath." '".l:dir."'")
     elseif executable('gnome-terminal')
-      silent exec 'silent ! gnome-terminal --window -e "$SHELL -c \"cd '''.l:dir.''' ; $SHELL\"" &'
+      silent call system('gnome-terminal --window -e "$SHELL -c \"cd '''.l:dir.''' ; $SHELL\""')
     else
       call s:beep('failed to open terminal')
     endif
