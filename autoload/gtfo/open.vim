@@ -132,10 +132,10 @@ func! gtfo#open#term(dir, cmd) "{{{
 
   if s:istmux
     if exists("a:cmd") && a:cmd == 'win'
-      silent call system("tmux new-window 'cd " . l:dir . "; $SHELL'")
+      silent call system("tmux new-window 'cd \"" . l:dir . "\"; $SHELL'")
     else
       silent call system('tmux split-window -'.
-          \ gtfo#open#splitdirection()." 'cd " . l:dir . "; $SHELL'")
+          \ gtfo#open#splitdirection()." 'cd \"" . l:dir . "\"; $SHELL'")
     endif
   elseif &shell !~? "cmd" && executable('cygstart') && executable('mintty')
     " https://code.google.com/p/mintty/wiki/Tips
