@@ -173,6 +173,9 @@ func! gtfo#open#term(dir, cmd) "{{{
 endf "}}}
 
 func! gtfo#open#splitdirection()
+  if system('tmux display-message -pF "#F"') =~# 'Z'
+    call system('tmux resize-window -Z')
+  endif
   let tmuxcols = split(system('tmux display-message -pF "#{client_width} #{pane_width}"'))
   let l:split=0
   for win in range(1,winnr('$'))
