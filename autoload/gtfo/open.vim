@@ -174,7 +174,7 @@ endf "}}}
 
 func! gtfo#open#splitdirection()
   if system('tmux display-message -pF "#F"') =~# 'Z'
-    call system('tmux resize-window -Z')
+    call system('tmux resize-pane -Z')
   endif
   let tmuxcols = split(system('tmux display-message -pF "#{client_width} #{pane_width}"'))
   let l:split=0
